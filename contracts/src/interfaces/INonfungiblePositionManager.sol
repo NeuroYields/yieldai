@@ -100,6 +100,17 @@ interface INonfungiblePositionManager {
     /// @param tokenId The ID of the token that is being burned
     function burn(uint256 tokenId) external payable;
 
+    /// @notice Transfers the ownership of an NFT from one address to another address
+    /// @param from The current owner of the NFT
+    /// @param to The new owner
+    /// @param tokenId The NFT to transfer
+    function transferFrom(address from, address to, uint256 tokenId) external;
+
+    /// @notice Approve an address to transfer a specific NFT
+    /// @param to The address to approve
+    /// @param tokenId The NFT to approve
+    function approve(address to, uint256 tokenId) external;
+
     /// @notice Returns the position information associated with a given token ID
     /// @param tokenId The ID of the token that represents the position
     /// @return nonce The nonce for permits

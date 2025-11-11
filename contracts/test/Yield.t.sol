@@ -112,6 +112,7 @@ contract YieldTest is Test {
         Yield.PoolDetails memory details = yieldContract.getPoolDetails(
             PAN_ASTER_USDT_POOL
         );
+        
 
         console.log("=== Adding Liquidity to PancakeSwap V3 ===");
         console.log("Current Tick:", details.currentTick);
@@ -313,5 +314,397 @@ contract YieldTest is Test {
         assertEq(posTickLower, expectedTickLower, "Position tickLower mismatch");
         assertEq(posTickUpper, expectedTickUpper, "Position tickUpper mismatch");
         assertEq(posLiquidity, expectedLiquidity, "Position liquidity mismatch");
+    }
+
+    /// @notice Test removing liquidity from PancakeSwap V3 pool
+    function test_RemoveLiquidity_PancakeSwap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            PAN_ASTER_USDT_POOL
+        );
+
+        console.log("=== Removing Liquidity from PancakeSwap V3 ===");
+
+        // Calculate tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000; // 0.1 ASTER
+        uint256 amount1Desired = 100000; // 0.1 USDT
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
+            .MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 tokenId, uint128 liquidity, , ) = yieldContract.addLiquidity(
+            Yield.DexType.PANCAKESWAP,
+            params
+        );
+
+        console.log("Position created with Token ID:", tokenId);
+        console.log("Liquidity:", liquidity);
+
+        // Check balances before removal
+        uint256 asterBalanceBefore = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
+        uint256 usdtBalanceBefore = IERC20(USDT_TOKEN).balanceOf(USDT_WHALE);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(PANCAKESWAP_NFPM).approve(
+            address(yieldContract),
+            tokenId
+        );
+
+        // Remove liquidity (remove all, don't burn)
+        (uint256 amount0, uint256 amount1) = yieldContract.removeLiquidity(
+            Yield.DexType.PANCAKESWAP,
+            tokenId,
+            0, // Remove all liquidity
+            0, // No slippage protection
+            0,
+            false // Don't burn NFT
+        );
+
+        vm.stopPrank();
+
+        console.log("Amount0 received:", amount0);
+        console.log("Amount1 received:", amount1);
+
+        // Verify tokens were received
+        uint256 asterBalanceAfter = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
+        uint256 usdtBalanceAfter = IERC20(USDT_TOKEN).balanceOf(USDT_WHALE);
+
+        assertTrue(amount0 > 0, "Should receive token0");
+        assertTrue(amount1 > 0, "Should receive token1");
+        assertGt(asterBalanceAfter, asterBalanceBefore, "ASTER balance should increase");
+        assertGt(usdtBalanceAfter, usdtBalanceBefore, "USDT balance should increase");
+
+        // Verify position has 0 liquidity
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            PANCAKESWAP_NFPM
+        );
+        (, , , , , , , uint128 remainingLiquidity, , , , ) = nfpm.positions(
+            tokenId
+        );
+        assertEq(remainingLiquidity, 0, "Position should have 0 liquidity");
+
+        console.log("=== Liquidity Removed Successfully ===");
+    }
+
+    /// @notice Test removing liquidity from Uniswap V3 pool
+    function test_RemoveLiquidity_Uniswap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            UNI_ASTER_USDT_POOL
+        );
+
+        console.log("=== Removing Liquidity from Uniswap V3 ===");
+
+        // Calculate tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000;
+        uint256 amount1Desired = 100000;
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
+            .MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 tokenId, uint128 liquidity, , ) = yieldContract.addLiquidity(
+            Yield.DexType.UNISWAP,
+            params
+        );
+
+        console.log("Position created with Token ID:", tokenId);
+        console.log("Liquidity:", liquidity);
+
+        // Check balances before removal
+        uint256 asterBalanceBefore = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
+        uint256 usdtBalanceBefore = IERC20(USDT_TOKEN).balanceOf(USDT_WHALE);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(UNISWAP_NFPM).approve(
+            address(yieldContract),
+            tokenId
+        );
+
+        // Remove liquidity (remove all, don't burn)
+        (uint256 amount0, uint256 amount1) = yieldContract.removeLiquidity(
+            Yield.DexType.UNISWAP,
+            tokenId,
+            0, // Remove all liquidity
+            0, // No slippage protection
+            0,
+            false // Don't burn NFT
+        );
+
+        vm.stopPrank();
+
+        console.log("Amount0 received:", amount0);
+        console.log("Amount1 received:", amount1);
+
+        // Verify tokens were received
+        uint256 asterBalanceAfter = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
+        uint256 usdtBalanceAfter = IERC20(USDT_TOKEN).balanceOf(USDT_WHALE);
+
+        assertTrue(amount0 > 0, "Should receive token0");
+        assertTrue(amount1 > 0, "Should receive token1");
+        assertGt(asterBalanceAfter, asterBalanceBefore, "ASTER balance should increase");
+        assertGt(usdtBalanceAfter, usdtBalanceBefore, "USDT balance should increase");
+
+        // Verify position has 0 liquidity
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            UNISWAP_NFPM
+        );
+        (, , , , , , , uint128 remainingLiquidity, , , , ) = nfpm.positions(
+            tokenId
+        );
+        assertEq(remainingLiquidity, 0, "Position should have 0 liquidity");
+
+        console.log("=== Liquidity Removed Successfully ===");
+    }
+
+    /// @notice Test removing liquidity and burning NFT
+    function test_RemoveLiquidityAndBurn_PancakeSwap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            PAN_ASTER_USDT_POOL
+        );
+
+        console.log("=== Removing Liquidity and Burning NFT (PancakeSwap) ===");
+
+        // Calculate tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000;
+        uint256 amount1Desired = 100000;
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
+            .MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 tokenId, uint128 liquidity, , ) = yieldContract.addLiquidity(
+            Yield.DexType.PANCAKESWAP,
+            params
+        );
+
+        console.log("Position created with Token ID:", tokenId);
+        console.log("Liquidity:", liquidity);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(PANCAKESWAP_NFPM).approve(
+            address(yieldContract),
+            tokenId
+        );
+
+        // Remove liquidity and burn NFT
+        (uint256 amount0, uint256 amount1) = yieldContract.removeLiquidity(
+            Yield.DexType.PANCAKESWAP,
+            tokenId,
+            0, // Remove all liquidity
+            0, // No slippage protection
+            0,
+            true // Burn NFT
+        );
+
+        vm.stopPrank();
+
+        console.log("Amount0 received:", amount0);
+        console.log("Amount1 received:", amount1);
+
+        assertTrue(amount0 > 0, "Should receive token0");
+        assertTrue(amount1 > 0, "Should receive token1");
+
+        // Verify NFT was burned by checking if positions() reverts
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            PANCAKESWAP_NFPM
+        );
+
+        // Try to query the position - it should revert since NFT is burned
+        vm.expectRevert();
+        nfpm.positions(tokenId);
+
+        console.log("=== NFT Burned Successfully ===");
+    }
+
+    /// @notice Test partial liquidity removal
+    function test_RemovePartialLiquidity_Uniswap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            UNI_ASTER_USDT_POOL
+        );
+
+        console.log("=== Removing Partial Liquidity from Uniswap V3 ===");
+
+        // Calculate tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000;
+        uint256 amount1Desired = 100000;
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
+            .MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 tokenId, uint128 liquidity, , ) = yieldContract.addLiquidity(
+            Yield.DexType.UNISWAP,
+            params
+        );
+
+        console.log("Position created with Token ID:", tokenId);
+        console.log("Total Liquidity:", liquidity);
+
+        // Calculate half of the liquidity
+        uint128 halfLiquidity = liquidity / 2;
+        console.log("Removing half liquidity:", halfLiquidity);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(UNISWAP_NFPM).approve(
+            address(yieldContract),
+            tokenId
+        );
+
+        // Remove half of the liquidity
+        (uint256 amount0, uint256 amount1) = yieldContract.removeLiquidity(
+            Yield.DexType.UNISWAP,
+            tokenId,
+            halfLiquidity, // Remove half
+            0, // No slippage protection
+            0,
+            false // Don't burn NFT
+        );
+
+        vm.stopPrank();
+
+        console.log("Amount0 received:", amount0);
+        console.log("Amount1 received:", amount1);
+
+        assertTrue(amount0 > 0, "Should receive token0");
+        assertTrue(amount1 > 0, "Should receive token1");
+
+        // Verify position still has remaining liquidity
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            UNISWAP_NFPM
+        );
+        (, , , , , , , uint128 remainingLiquidity, , , , ) = nfpm.positions(
+            tokenId
+        );
+
+        console.log("Remaining liquidity:", remainingLiquidity);
+        assertGt(remainingLiquidity, 0, "Position should have remaining liquidity");
+        assertApproxEqAbs(
+            remainingLiquidity,
+            liquidity - halfLiquidity,
+            1,
+            "Remaining liquidity should be approximately half"
+        );
+
+        console.log("=== Partial Liquidity Removed Successfully ===");
     }
 }

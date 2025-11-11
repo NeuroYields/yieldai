@@ -6,11 +6,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IUniswapV3Pool} from "./interfaces/IUniswapV3Pool.sol";
 import {INonfungiblePositionManager} from "./interfaces/INonfungiblePositionManager.sol";
 import "forge-std/console.sol";
 
-contract Yield is Ownable, ReentrancyGuard {
+contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
     using SafeERC20 for IERC20;
 
     /// @notice Enum to specify which DEX to use
@@ -53,6 +54,16 @@ contract Yield is Ownable, ReentrancyGuard {
         uint128 liquidity,
         uint256 amount0,
         uint256 amount1
+    );
+
+    /// @notice Event emitted when liquidity is removed
+    event LiquidityRemoved(
+        DexType indexed dexType,
+        uint256 indexed tokenId,
+        uint128 liquidityRemoved,
+        uint256 amount0,
+        uint256 amount1,
+        bool burned
     );
 
     constructor() Ownable(msg.sender) {}
@@ -177,5 +188,111 @@ contract Yield is Ownable, ReentrancyGuard {
         console.log("Amount1:", amount1);
 
         return (tokenId, liquidity, amount0, amount1);
+    }
+
+    /// @notice Remove liquidity from a position
+    /// @param dexType The DEX to use (UNISWAP or PANCAKESWAP)
+    /// @param tokenId The ID of the position NFT
+    /// @param liquidityToRemove The amount of liquidity to remove (use 0 to remove all)
+    /// @param amount0Min Minimum amount of token0 to receive
+    /// @param amount1Min Minimum amount of token1 to receive
+    /// @param burnNFT Whether to burn the NFT after removing all liquidity
+    /// @return amount0 The amount of token0 received
+    /// @return amount1 The amount of token1 received
+    function removeLiquidity(
+        DexType dexType,
+        uint256 tokenId,
+        uint128 liquidityToRemove,
+        uint256 amount0Min,
+        uint256 amount1Min,
+        bool burnNFT
+    )
+        external
+        nonReentrant
+        returns (uint256 amount0, uint256 amount1)
+    {
+        // Get the appropriate NFPM address based on DEX type
+        address nfpm = dexType == DexType.UNISWAP ? uniswapNFPM : pancakeswapNFPM;
+        require(nfpm != address(0), "NFPM not set");
+
+        INonfungiblePositionManager nfpmContract = INonfungiblePositionManager(nfpm);
+
+        // Get position details to determine liquidity
+        (
+            ,
+            ,
+            address token0,
+            address token1,
+            ,
+            ,
+            ,
+            uint128 positionLiquidity,
+            ,
+            ,
+            ,
+
+        ) = nfpmContract.positions(tokenId);
+
+        // If liquidityToRemove is 0, remove all liquidity
+        uint128 liquidityAmount = liquidityToRemove == 0 ? positionLiquidity : liquidityToRemove;
+        require(liquidityAmount > 0, "No liquidity to remove");
+        require(liquidityAmount <= positionLiquidity, "Insufficient liquidity");
+
+        // Transfer NFT from user to this contract
+        nfpmContract.transferFrom(msg.sender, address(this), tokenId);
+
+        // Decrease liquidity
+        INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseParams =
+            INonfungiblePositionManager.DecreaseLiquidityParams({
+                tokenId: tokenId,
+                liquidity: liquidityAmount,
+                amount0Min: amount0Min,
+                amount1Min: amount1Min,
+                deadline: block.timestamp
+            });
+
+        (amount0, amount1) = nfpmContract.decreaseLiquidity(decreaseParams);
+
+        // Collect the tokens
+        INonfungiblePositionManager.CollectParams memory collectParams =
+            INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: msg.sender,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            });
+
+        (uint256 collected0, uint256 collected1) = nfpmContract.collect(collectParams);
+
+        // Burn NFT if requested and all liquidity is removed
+        bool burned = false;
+        if (burnNFT && liquidityAmount == positionLiquidity) {
+            nfpmContract.burn(tokenId);
+            burned = true;
+        } else {
+            // Transfer NFT back to user
+            nfpmContract.transferFrom(address(this), msg.sender, tokenId);
+        }
+
+        emit LiquidityRemoved(dexType, tokenId, liquidityAmount, collected0, collected1, burned);
+
+        console.log("Liquidity removed successfully");
+        console.log("Token ID:", tokenId);
+        console.log("Liquidity removed:", liquidityAmount);
+        console.log("Amount0 collected:", collected0);
+        console.log("Amount1 collected:", collected1);
+        console.log("NFT burned:", burned);
+
+        return (collected0, collected1);
+    }
+
+    /// @notice ERC721 receiver implementation to accept NFT transfers
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
