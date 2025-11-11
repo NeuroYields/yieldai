@@ -5,16 +5,16 @@ use serde::Deserialize;
 
 use crate::types::{DexType, lowercase_address};
 
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub contract_address: String,
-    pub port: u16,
-    pub toml: TomlConfig,
+#[derive(Debug, Deserialize, Clone)]
+pub struct TomlConfig {
+    pub chain: ChainConfig,
+    pub pools: Vec<PoolConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct TomlConfig {
-    pub pools: Vec<PoolConfig>,
+pub struct ChainConfig {
+    pub rpc_url: String,
+    pub chain_id: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -24,10 +24,19 @@ pub struct PoolConfig {
     pub dex_type: DexType,
 }
 
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub contract_address: String,
+    pub private_key: String,
+    pub port: u16,
+    pub toml: TomlConfig,
+}
+
 impl Config {
     pub fn load() -> Self {
         let contract_address =
             std::env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+        let private_key = std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
         let port: u16 = std::env::var("PORT")
             .unwrap_or_else(|_| "8080".to_string())
             .parse()
@@ -42,6 +51,7 @@ impl Config {
 
         Self {
             contract_address,
+            private_key,
             port,
             toml: config,
         }
