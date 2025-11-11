@@ -1,9 +1,13 @@
+use actix_cors::Cors;
 use actix_web::{App, HttpServer};
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa_actix_web::AppExt;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::CONFIG;
 
+mod api;
 mod config;
 
 #[actix_web::main]
@@ -34,9 +38,27 @@ async fn main() -> std::io::Result<()> {
     info!("Logger initialized Successfully");
 
     info!("Starting HTTP server at http://localhost:{}", CONFIG.port);
+    info!(
+        "Swagger UI available at http://localhost:{}/swagger-ui/",
+        CONFIG.port
+    );
 
-    HttpServer::new(move || App::new())
-        .bind(("127.0.0.1", CONFIG.port))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header();
+
+        let (app, app_api) = App::new()
+            .wrap(cors)
+            .into_utoipa_app()
+            .service(api::get_index_service)
+            .service(api::get_health_service)
+            .split_for_parts();
+
+        app.service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", app_api))
+    })
+    .bind(("127.0.0.1", CONFIG.port))?
+    .run()
+    .await
 }
