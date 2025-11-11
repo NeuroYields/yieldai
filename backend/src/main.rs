@@ -9,6 +9,7 @@ use crate::config::CONFIG;
 
 mod api;
 mod config;
+mod types;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -36,6 +37,8 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     info!("Logger initialized Successfully");
+
+    info!("Pools loaded from config: {:?}", CONFIG.toml.pools);
 
     info!("Starting HTTP server at http://localhost:{}", CONFIG.port);
     info!(
