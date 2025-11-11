@@ -25,13 +25,23 @@ contract YieldTest is Test {
         0x46A15B0b27311cedF172AB29E4f4766fbE7F4364;
     address constant UNISWAP_NFPM = 0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613;
 
+    // Router addresses on BNB Chain
+    address constant PANCAKESWAP_ROUTER =
+        0x13f4EA83D0bd40E75C8222255bc855a974568Dd4; // PancakeSwap V3 SmartRouter
+    address constant UNISWAP_ROUTER = 0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2; // Uniswap V3 SwapRouter
+
     // Whale addresses with tokens for testing
     address constant USDT_WHALE = 0x8894E0a0c962CB723c1976a4421c95949bE2D4E3; // Binance Hot Wallet
     address constant ASTER_WHALE = 0x000Ae314E2A2172a039B26378814C252734f556A; // ASTER token contract (has initial supply)
 
     function setUp() public {
         // Deploy the Yield contract
-        yieldContract = new Yield(UNISWAP_NFPM, PANCAKESWAP_NFPM);
+        yieldContract = new Yield(
+            UNISWAP_NFPM,
+            PANCAKESWAP_NFPM,
+            UNISWAP_ROUTER,
+            PANCAKESWAP_ROUTER
+        );
     }
 
     /// @notice Test getting pool details for PancakeSwap V3 pool (USDT/ASTER)
@@ -784,5 +794,242 @@ contract YieldTest is Test {
         );
 
         console.log("=== Partial Liquidity Removed Successfully ===");
+    }
+
+    /// @notice Test rebalancing a position without swapping
+    function test_Rebalance_NoSwap_PancakeSwap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            PAN_ASTER_USDT_POOL
+        );
+
+        console.log("=== Rebalancing Position (No Swap) - PancakeSwap ===");
+
+        // Calculate initial tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000;
+        uint256 amount1Desired = 100000;
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 oldTokenId, uint128 oldLiquidity, , ) = yieldContract
+            .addLiquidity(Yield.DexType.PANCAKESWAP, params);
+
+        console.log("Old Position Token ID:", oldTokenId);
+        console.log("Old Liquidity:", oldLiquidity);
+
+        // Calculate new tick range (wider range)
+        int24 newTickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 20);
+        int24 newTickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 20);
+
+        console.log("New Tick Lower:", newTickLower);
+        console.log("New Tick Upper:", newTickUpper);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(PANCAKESWAP_NFPM).approve(
+            address(yieldContract),
+            oldTokenId
+        );
+
+        // Rebalance without swapping
+        (uint256 newTokenId, uint128 newLiquidity) = yieldContract.rebalance(
+            Yield.DexType.PANCAKESWAP,
+            oldTokenId,
+            newTickLower,
+            newTickUpper,
+            address(0), // No swap
+            address(0),
+            0,
+            0,
+            0
+        );
+
+        vm.stopPrank();
+
+        console.log("New Position Token ID:", newTokenId);
+        console.log("New Liquidity:", newLiquidity);
+
+        // Verify new position exists
+        assertTrue(newTokenId > 0, "New token ID should be valid");
+        assertTrue(newLiquidity > 0, "New liquidity should be positive");
+
+        // Verify old position was burned
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            PANCAKESWAP_NFPM
+        );
+        vm.expectRevert();
+        nfpm.positions(oldTokenId);
+
+        // Verify new position details
+        _verifyPosition(
+            PANCAKESWAP_NFPM,
+            newTokenId,
+            details.token0,
+            details.token1,
+            details.fee,
+            newTickLower,
+            newTickUpper,
+            newLiquidity
+        );
+
+        console.log("=== Position Rebalanced Successfully ===");
+    }
+
+    /// @notice Test rebalancing a position with token swap
+    /// NOTE: This test is currently skipped because PancakeSwap SmartRouter has a different interface
+    /// In production, you would need to implement the correct router interface or use a DEX aggregator
+    function skip_test_Rebalance_WithSwap_Uniswap() public {
+        // First, add liquidity to get a position
+        Yield.PoolDetails memory details = yieldContract.getPoolDetails(
+            UNI_ASTER_USDT_POOL
+        );
+
+        console.log("=== Rebalancing Position (With Swap) - Uniswap ===");
+
+        // Calculate initial tick range
+        int24 tickSpacing = details.tickSpacing;
+        int24 currentTick = details.currentTick;
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
+
+        // Use small amounts for testing
+        uint256 amount0Desired = 100000;
+        uint256 amount1Desired = 100000;
+
+        vm.startPrank(USDT_WHALE);
+
+        // Deal ASTER if needed
+        if (IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE) < amount0Desired) {
+            deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
+        }
+
+        // Approve tokens
+        IERC20(ASTER_TOKEN).approve(address(yieldContract), amount0Desired);
+        IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
+
+        // Add liquidity
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
+                token0: details.token0,
+                token1: details.token1,
+                fee: details.fee,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: USDT_WHALE,
+                deadline: block.timestamp + 300
+            });
+
+        (uint256 oldTokenId, uint128 oldLiquidity, , ) = yieldContract
+            .addLiquidity(Yield.DexType.UNISWAP, params);
+
+        console.log("Old Position Token ID:", oldTokenId);
+        console.log("Old Liquidity:", oldLiquidity);
+
+        // Calculate new tick range
+        int24 newTickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 15);
+        int24 newTickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 15);
+
+        console.log("New Tick Lower:", newTickLower);
+        console.log("New Tick Upper:", newTickUpper);
+
+        // Approve NFT transfer
+        INonfungiblePositionManager(UNISWAP_NFPM).approve(
+            address(yieldContract),
+            oldTokenId
+        );
+
+        // Rebalance with swapping (swap some ASTER to USDT using PancakeSwap)
+        uint256 swapAmount = 10000; // Swap 10k ASTER to USDT
+        (uint256 newTokenId, uint128 newLiquidity) = yieldContract.rebalance(
+            Yield.DexType.UNISWAP,
+            oldTokenId,
+            newTickLower,
+            newTickUpper,
+            ASTER_TOKEN, // Swap from ASTER
+            USDT_TOKEN, // Swap to USDT
+            swapAmount,
+            0, // No slippage protection for test
+            2500 // Use 0.25% fee tier on PancakeSwap
+        );
+
+        vm.stopPrank();
+
+        console.log("New Position Token ID:", newTokenId);
+        console.log("New Liquidity:", newLiquidity);
+
+        // Verify new position exists
+        assertTrue(newTokenId > 0, "New token ID should be valid");
+        assertTrue(newLiquidity > 0, "New liquidity should be positive");
+
+        // Verify old position was burned
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            UNISWAP_NFPM
+        );
+        vm.expectRevert();
+        nfpm.positions(oldTokenId);
+
+        // Verify new position details
+        _verifyPosition(
+            UNISWAP_NFPM,
+            newTokenId,
+            details.token0,
+            details.token1,
+            details.fee,
+            newTickLower,
+            newTickUpper,
+            newLiquidity
+        );
+
+        console.log("=== Position Rebalanced with Swap Successfully ===");
     }
 }

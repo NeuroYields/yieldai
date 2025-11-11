@@ -9,6 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IUniswapV3Pool} from "./interfaces/IUniswapV3Pool.sol";
 import {INonfungiblePositionManager} from "./interfaces/INonfungiblePositionManager.sol";
+import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
 import "forge-std/console.sol";
 
 contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
@@ -44,6 +45,12 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
     /// @notice Address of PancakeSwap V3 NonfungiblePositionManager
     address public pancakeswapNFPM;
 
+    /// @notice Address of Uniswap V3 SwapRouter
+    address public uniswapRouter;
+
+    /// @notice Address of PancakeSwap V3 SmartRouter
+    address public pancakeswapRouter;
+
     /// @notice Event emitted when NFPM addresses are updated
     event NFPMAddressUpdated(DexType indexed dexType, address indexed nfpm);
 
@@ -66,12 +73,33 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         bool burned
     );
 
+    /// @notice Event emitted when tokens are swapped
+    event TokensSwapped(
+        DexType indexed dexType,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut
+    );
+
+    /// @notice Event emitted when position is rebalanced
+    event PositionRebalanced(
+        DexType indexed dexType,
+        uint256 indexed oldTokenId,
+        uint256 indexed newTokenId,
+        uint128 newLiquidity
+    );
+
     constructor(
         address _uniswapNFPM,
-        address _pancakeswapNFPM
+        address _pancakeswapNFPM,
+        address _uniswapRouter,
+        address _pancakeswapRouter
     ) Ownable(msg.sender) {
         uniswapNFPM = _uniswapNFPM;
         pancakeswapNFPM = _pancakeswapNFPM;
+        uniswapRouter = _uniswapRouter;
+        pancakeswapRouter = _pancakeswapRouter;
     }
 
     /// @notice Get all details for a Uniswap V3 or PancakeSwap V3 pool
@@ -128,6 +156,20 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         require(_nfpm != address(0), "Invalid address");
         pancakeswapNFPM = _nfpm;
         emit NFPMAddressUpdated(DexType.PANCAKESWAP, _nfpm);
+    }
+
+    /// @notice Set the Uniswap V3 SwapRouter address
+    /// @param _router The address of the Uniswap V3 SwapRouter
+    function setUniswapRouter(address _router) external onlyOwner {
+        require(_router != address(0), "Invalid address");
+        uniswapRouter = _router;
+    }
+
+    /// @notice Set the PancakeSwap V3 SmartRouter address
+    /// @param _router The address of the PancakeSwap V3 SmartRouter
+    function setPancakeswapRouter(address _router) external onlyOwner {
+        require(_router != address(0), "Invalid address");
+        pancakeswapRouter = _router;
     }
 
     /// @notice Add liquidity to a pool using the specified DEX's NonfungiblePositionManager
@@ -312,6 +354,210 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         console.log("NFT burned:", burned);
 
         return (collected0, collected1);
+    }
+
+    /// @notice Rebalance a position by removing liquidity, optionally swapping, and re-adding with new range
+    /// @param dexType The DEX where the new position will be created
+    /// @param tokenId The ID of the existing position to rebalance
+    /// @param newTickLower The new lower tick for the position
+    /// @param newTickUpper The new upper tick for the position
+    /// @param swapTokenIn The token to swap from (address(0) if no swap)
+    /// @param swapTokenOut The token to swap to (address(0) if no swap)
+    /// @param swapAmount The amount to swap (0 if no swap)
+    /// @param swapAmountOutMin Minimum amount to receive from swap
+    /// @param swapFee The fee tier of the pool to use for swapping
+    /// @return newTokenId The ID of the newly created position
+    /// @return liquidity The amount of liquidity in the new position
+    function rebalance(
+        DexType dexType,
+        uint256 tokenId,
+        int24 newTickLower,
+        int24 newTickUpper,
+        address swapTokenIn,
+        address swapTokenOut,
+        uint256 swapAmount,
+        uint256 swapAmountOutMin,
+        uint24 swapFee
+    ) external nonReentrant returns (uint256 newTokenId, uint128 liquidity) {
+        // Get the NFPM for the existing position
+        address oldNfpm = dexType == DexType.UNISWAP
+            ? uniswapNFPM
+            : pancakeswapNFPM;
+        require(oldNfpm != address(0), "NFPM not set");
+
+        INonfungiblePositionManager nfpmContract = INonfungiblePositionManager(
+            oldNfpm
+        );
+
+        // Get position details
+        (
+            ,
+            ,
+            address token0,
+            address token1,
+            uint24 fee,
+            ,
+            ,
+            uint128 positionLiquidity,
+            ,
+            ,
+            ,
+
+        ) = nfpmContract.positions(tokenId);
+
+        require(positionLiquidity > 0, "No liquidity in position");
+
+        // Transfer NFT from user to this contract
+        nfpmContract.transferFrom(msg.sender, address(this), tokenId);
+
+        // Remove all liquidity
+        INonfungiblePositionManager.DecreaseLiquidityParams
+            memory decreaseParams = INonfungiblePositionManager
+                .DecreaseLiquidityParams({
+                    tokenId: tokenId,
+                    liquidity: positionLiquidity,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    deadline: block.timestamp
+                });
+
+        nfpmContract.decreaseLiquidity(decreaseParams);
+
+        // Collect the tokens to this contract
+        INonfungiblePositionManager.CollectParams
+            memory collectParams = INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: address(this),
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            });
+
+        (uint256 amount0, uint256 amount1) = nfpmContract.collect(
+            collectParams
+        );
+
+        // Burn the old NFT
+        nfpmContract.burn(tokenId);
+
+        console.log("Removed liquidity from old position");
+        console.log("Amount0:", amount0);
+        console.log("Amount1:", amount1);
+
+        // Perform swap if specified
+        if (
+            swapTokenIn != address(0) &&
+            swapTokenOut != address(0) &&
+            swapAmount > 0
+        ) {
+            // Use the opposite DEX for swapping
+            DexType swapDex = dexType == DexType.UNISWAP
+                ? DexType.PANCAKESWAP
+                : DexType.UNISWAP;
+            address router = swapDex == DexType.UNISWAP
+                ? uniswapRouter
+                : pancakeswapRouter;
+            require(router != address(0), "Router not set");
+
+            // Approve router to spend tokens
+            IERC20(swapTokenIn).forceApprove(router, swapAmount);
+
+            // Execute swap
+            ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter
+                .ExactInputSingleParams({
+                    tokenIn: swapTokenIn,
+                    tokenOut: swapTokenOut,
+                    fee: swapFee,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: swapAmount,
+                    amountOutMinimum: swapAmountOutMin,
+                    sqrtPriceLimitX96: 0
+                });
+
+            uint256 amountOut = ISwapRouter(router).exactInputSingle(
+                swapParams
+            );
+
+            // Update balances after swap
+            if (swapTokenIn == token0) {
+                amount0 -= swapAmount;
+                amount1 += amountOut;
+            } else {
+                amount1 -= swapAmount;
+                amount0 += amountOut;
+            }
+
+            emit TokensSwapped(
+                swapDex,
+                swapTokenIn,
+                swapTokenOut,
+                swapAmount,
+                amountOut
+            );
+
+            console.log("Swapped tokens");
+            console.log("Amount in:", swapAmount);
+            console.log("Amount out:", amountOut);
+        }
+
+        // Re-add liquidity with new range
+        IERC20(token0).forceApprove(oldNfpm, amount0);
+        IERC20(token1).forceApprove(oldNfpm, amount1);
+
+        INonfungiblePositionManager.MintParams
+            memory mintParams = INonfungiblePositionManager.MintParams({
+                token0: token0,
+                token1: token1,
+                fee: fee,
+                tickLower: newTickLower,
+                tickUpper: newTickUpper,
+                amount0Desired: amount0,
+                amount1Desired: amount1,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: msg.sender,
+                deadline: block.timestamp
+            });
+
+        uint256 amount0Used;
+        uint256 amount1Used;
+        (newTokenId, liquidity, amount0Used, amount1Used) = nfpmContract.mint(
+            mintParams
+        );
+
+        // Refund any unused tokens to the user
+        if (amount0 > amount0Used) {
+            IERC20(token0).safeTransfer(msg.sender, amount0 - amount0Used);
+        }
+        if (amount1 > amount1Used) {
+            IERC20(token1).safeTransfer(msg.sender, amount1 - amount1Used);
+        }
+
+        // Reset approvals
+        IERC20(token0).forceApprove(oldNfpm, 0);
+        IERC20(token1).forceApprove(oldNfpm, 0);
+
+        emit PositionRebalanced(dexType, tokenId, newTokenId, liquidity);
+
+        console.log("Rebalanced position successfully");
+        console.log("Old Token ID:", tokenId);
+        console.log("New Token ID:", newTokenId);
+        console.log("New Liquidity:", liquidity);
+
+        return (newTokenId, liquidity);
+    }
+
+    /// @notice withdraw function to retrieve any ERC20 tokens accidentally sent to this contract
+    /// @param token The address of the ERC20 token to withdraw
+    /// @param amount The amount of tokens to withdraw
+    /// @param to The address to send the tokens to
+    function withdraw(
+        address token,
+        uint256 amount,
+        address to
+    ) external onlyOwner {
+        require(to != address(0), "Invalid recipient");
+        IERC20(token).safeTransfer(to, amount);
     }
 
     /// @notice ERC721 receiver implementation to accept NFT transfers
