@@ -21,7 +21,8 @@ contract YieldTest is Test {
         0x30Db6DFDb8817765797bd62316e41F5f4E431E93; // ASTER/USDT 0.3% fee
 
     // NonfungiblePositionManager addresses on BNB Chain
-    address constant PANCAKESWAP_NFPM = 0x46A15B0b27311cedF172AB29E4f4766fbE7F4364;
+    address constant PANCAKESWAP_NFPM =
+        0x46A15B0b27311cedF172AB29E4f4766fbE7F4364;
     address constant UNISWAP_NFPM = 0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613;
 
     // Whale addresses with tokens for testing
@@ -30,11 +31,7 @@ contract YieldTest is Test {
 
     function setUp() public {
         // Deploy the Yield contract
-        yieldContract = new Yield();
-
-        // Set NFPM addresses
-        yieldContract.setUniswapNFPM(UNISWAP_NFPM);
-        yieldContract.setPancakeswapNFPM(PANCAKESWAP_NFPM);
+        yieldContract = new Yield(UNISWAP_NFPM, PANCAKESWAP_NFPM);
     }
 
     /// @notice Test getting pool details for PancakeSwap V3 pool (USDT/ASTER)
@@ -112,7 +109,6 @@ contract YieldTest is Test {
         Yield.PoolDetails memory details = yieldContract.getPoolDetails(
             PAN_ASTER_USDT_POOL
         );
-        
 
         console.log("=== Adding Liquidity to PancakeSwap V3 ===");
         console.log("Current Tick:", details.currentTick);
@@ -123,8 +119,12 @@ contract YieldTest is Test {
         int24 currentTick = details.currentTick;
 
         // Round current tick to nearest tick spacing
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         console.log("Tick Lower:", tickLower);
         console.log("Tick Upper:", tickUpper);
@@ -147,7 +147,10 @@ contract YieldTest is Test {
         if (asterBalanceBefore < amount0Desired) {
             deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
             asterBalanceBefore = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
-            console.log("Dealt ASTER to whale, new balance:", asterBalanceBefore);
+            console.log(
+                "Dealt ASTER to whale, new balance:",
+                asterBalanceBefore
+            );
         }
 
         // Approve tokens
@@ -189,7 +192,16 @@ contract YieldTest is Test {
         console.log("Amount1 Used:", amount1);
 
         // Verify the position was created
-        _verifyPosition(PANCAKESWAP_NFPM, tokenId, details.token0, details.token1, details.fee, tickLower, tickUpper, liquidity);
+        _verifyPosition(
+            PANCAKESWAP_NFPM,
+            tokenId,
+            details.token0,
+            details.token1,
+            details.fee,
+            tickLower,
+            tickUpper,
+            liquidity
+        );
 
         console.log("=== Position Verified Successfully ===");
     }
@@ -210,8 +222,12 @@ contract YieldTest is Test {
         int24 currentTick = details.currentTick;
 
         // Round current tick to nearest tick spacing
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         console.log("Tick Lower:", tickLower);
         console.log("Tick Upper:", tickUpper);
@@ -234,7 +250,10 @@ contract YieldTest is Test {
         if (asterBalanceBefore < amount0Desired) {
             deal(ASTER_TOKEN, USDT_WHALE, amount0Desired * 10);
             asterBalanceBefore = IERC20(ASTER_TOKEN).balanceOf(USDT_WHALE);
-            console.log("Dealt ASTER to whale, new balance:", asterBalanceBefore);
+            console.log(
+                "Dealt ASTER to whale, new balance:",
+                asterBalanceBefore
+            );
         }
 
         // Approve tokens
@@ -276,7 +295,16 @@ contract YieldTest is Test {
         console.log("Amount1 Used:", amount1);
 
         // Verify the position was created
-        _verifyPosition(UNISWAP_NFPM, tokenId, details.token0, details.token1, details.fee, tickLower, tickUpper, liquidity);
+        _verifyPosition(
+            UNISWAP_NFPM,
+            tokenId,
+            details.token0,
+            details.token1,
+            details.fee,
+            tickLower,
+            tickUpper,
+            liquidity
+        );
 
         console.log("=== Position Verified Successfully ===");
     }
@@ -292,7 +320,9 @@ contract YieldTest is Test {
         int24 expectedTickUpper,
         uint128 expectedLiquidity
     ) internal {
-        INonfungiblePositionManager nfpm = INonfungiblePositionManager(nfpmAddress);
+        INonfungiblePositionManager nfpm = INonfungiblePositionManager(
+            nfpmAddress
+        );
         (
             ,
             ,
@@ -311,9 +341,21 @@ contract YieldTest is Test {
         assertEq(posToken0, expectedToken0, "Position token0 mismatch");
         assertEq(posToken1, expectedToken1, "Position token1 mismatch");
         assertEq(posFee, expectedFee, "Position fee mismatch");
-        assertEq(posTickLower, expectedTickLower, "Position tickLower mismatch");
-        assertEq(posTickUpper, expectedTickUpper, "Position tickUpper mismatch");
-        assertEq(posLiquidity, expectedLiquidity, "Position liquidity mismatch");
+        assertEq(
+            posTickLower,
+            expectedTickLower,
+            "Position tickLower mismatch"
+        );
+        assertEq(
+            posTickUpper,
+            expectedTickUpper,
+            "Position tickUpper mismatch"
+        );
+        assertEq(
+            posLiquidity,
+            expectedLiquidity,
+            "Position liquidity mismatch"
+        );
     }
 
     /// @notice Test removing liquidity from PancakeSwap V3 pool
@@ -328,8 +370,12 @@ contract YieldTest is Test {
         // Calculate tick range
         int24 tickSpacing = details.tickSpacing;
         int24 currentTick = details.currentTick;
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         // Use small amounts for testing
         uint256 amount0Desired = 100000; // 0.1 ASTER
@@ -347,8 +393,8 @@ contract YieldTest is Test {
         IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
 
         // Add liquidity
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
-            .MintParams({
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
                 token0: details.token0,
                 token1: details.token1,
                 fee: details.fee,
@@ -401,8 +447,16 @@ contract YieldTest is Test {
 
         assertTrue(amount0 > 0, "Should receive token0");
         assertTrue(amount1 > 0, "Should receive token1");
-        assertGt(asterBalanceAfter, asterBalanceBefore, "ASTER balance should increase");
-        assertGt(usdtBalanceAfter, usdtBalanceBefore, "USDT balance should increase");
+        assertGt(
+            asterBalanceAfter,
+            asterBalanceBefore,
+            "ASTER balance should increase"
+        );
+        assertGt(
+            usdtBalanceAfter,
+            usdtBalanceBefore,
+            "USDT balance should increase"
+        );
 
         // Verify position has 0 liquidity
         INonfungiblePositionManager nfpm = INonfungiblePositionManager(
@@ -428,8 +482,12 @@ contract YieldTest is Test {
         // Calculate tick range
         int24 tickSpacing = details.tickSpacing;
         int24 currentTick = details.currentTick;
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         // Use small amounts for testing
         uint256 amount0Desired = 100000;
@@ -447,8 +505,8 @@ contract YieldTest is Test {
         IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
 
         // Add liquidity
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
-            .MintParams({
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
                 token0: details.token0,
                 token1: details.token1,
                 fee: details.fee,
@@ -501,8 +559,16 @@ contract YieldTest is Test {
 
         assertTrue(amount0 > 0, "Should receive token0");
         assertTrue(amount1 > 0, "Should receive token1");
-        assertGt(asterBalanceAfter, asterBalanceBefore, "ASTER balance should increase");
-        assertGt(usdtBalanceAfter, usdtBalanceBefore, "USDT balance should increase");
+        assertGt(
+            asterBalanceAfter,
+            asterBalanceBefore,
+            "ASTER balance should increase"
+        );
+        assertGt(
+            usdtBalanceAfter,
+            usdtBalanceBefore,
+            "USDT balance should increase"
+        );
 
         // Verify position has 0 liquidity
         INonfungiblePositionManager nfpm = INonfungiblePositionManager(
@@ -528,8 +594,12 @@ contract YieldTest is Test {
         // Calculate tick range
         int24 tickSpacing = details.tickSpacing;
         int24 currentTick = details.currentTick;
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         // Use small amounts for testing
         uint256 amount0Desired = 100000;
@@ -547,8 +617,8 @@ contract YieldTest is Test {
         IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
 
         // Add liquidity
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
-            .MintParams({
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
                 token0: details.token0,
                 token1: details.token1,
                 fee: details.fee,
@@ -618,8 +688,12 @@ contract YieldTest is Test {
         // Calculate tick range
         int24 tickSpacing = details.tickSpacing;
         int24 currentTick = details.currentTick;
-        int24 tickLower = (currentTick / tickSpacing) * tickSpacing - (tickSpacing * 10);
-        int24 tickUpper = (currentTick / tickSpacing) * tickSpacing + (tickSpacing * 10);
+        int24 tickLower = (currentTick / tickSpacing) *
+            tickSpacing -
+            (tickSpacing * 10);
+        int24 tickUpper = (currentTick / tickSpacing) *
+            tickSpacing +
+            (tickSpacing * 10);
 
         // Use small amounts for testing
         uint256 amount0Desired = 100000;
@@ -637,8 +711,8 @@ contract YieldTest is Test {
         IERC20(USDT_TOKEN).approve(address(yieldContract), amount1Desired);
 
         // Add liquidity
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager
-            .MintParams({
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
                 token0: details.token0,
                 token1: details.token1,
                 fee: details.fee,
@@ -697,7 +771,11 @@ contract YieldTest is Test {
         );
 
         console.log("Remaining liquidity:", remainingLiquidity);
-        assertGt(remainingLiquidity, 0, "Position should have remaining liquidity");
+        assertGt(
+            remainingLiquidity,
+            0,
+            "Position should have remaining liquidity"
+        );
         assertApproxEqAbs(
             remainingLiquidity,
             liquidity - halfLiquidity,

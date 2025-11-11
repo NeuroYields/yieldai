@@ -66,7 +66,13 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         bool burned
     );
 
-    constructor() Ownable(msg.sender) {}
+    constructor(
+        address _uniswapNFPM,
+        address _pancakeswapNFPM
+    ) Ownable(msg.sender) {
+        uniswapNFPM = _uniswapNFPM;
+        pancakeswapNFPM = _pancakeswapNFPM;
+    }
 
     /// @notice Get all details for a Uniswap V3 or PancakeSwap V3 pool
     /// @param poolAddress The address of the pool
@@ -145,7 +151,9 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         )
     {
         // Get the appropriate NFPM address based on DEX type
-        address nfpm = dexType == DexType.UNISWAP ? uniswapNFPM : pancakeswapNFPM;
+        address nfpm = dexType == DexType.UNISWAP
+            ? uniswapNFPM
+            : pancakeswapNFPM;
         require(nfpm != address(0), "NFPM not set");
 
         // Transfer tokens from user to this contract
@@ -165,14 +173,22 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         IERC20(params.token1).forceApprove(nfpm, params.amount1Desired);
 
         // Mint the position
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(nfpm).mint(params);
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(
+            nfpm
+        ).mint(params);
 
         // Refund any unused tokens to the user
         if (params.amount0Desired > amount0) {
-            IERC20(params.token0).safeTransfer(msg.sender, params.amount0Desired - amount0);
+            IERC20(params.token0).safeTransfer(
+                msg.sender,
+                params.amount0Desired - amount0
+            );
         }
         if (params.amount1Desired > amount1) {
-            IERC20(params.token1).safeTransfer(msg.sender, params.amount1Desired - amount1);
+            IERC20(params.token1).safeTransfer(
+                msg.sender,
+                params.amount1Desired - amount1
+            );
         }
 
         // Reset approvals to 0 for security
@@ -206,16 +222,16 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         uint256 amount0Min,
         uint256 amount1Min,
         bool burnNFT
-    )
-        external
-        nonReentrant
-        returns (uint256 amount0, uint256 amount1)
-    {
+    ) external nonReentrant returns (uint256 amount0, uint256 amount1) {
         // Get the appropriate NFPM address based on DEX type
-        address nfpm = dexType == DexType.UNISWAP ? uniswapNFPM : pancakeswapNFPM;
+        address nfpm = dexType == DexType.UNISWAP
+            ? uniswapNFPM
+            : pancakeswapNFPM;
         require(nfpm != address(0), "NFPM not set");
 
-        INonfungiblePositionManager nfpmContract = INonfungiblePositionManager(nfpm);
+        INonfungiblePositionManager nfpmContract = INonfungiblePositionManager(
+            nfpm
+        );
 
         // Get position details to determine liquidity
         (
@@ -234,7 +250,9 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         ) = nfpmContract.positions(tokenId);
 
         // If liquidityToRemove is 0, remove all liquidity
-        uint128 liquidityAmount = liquidityToRemove == 0 ? positionLiquidity : liquidityToRemove;
+        uint128 liquidityAmount = liquidityToRemove == 0
+            ? positionLiquidity
+            : liquidityToRemove;
         require(liquidityAmount > 0, "No liquidity to remove");
         require(liquidityAmount <= positionLiquidity, "Insufficient liquidity");
 
@@ -242,27 +260,30 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
         nfpmContract.transferFrom(msg.sender, address(this), tokenId);
 
         // Decrease liquidity
-        INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseParams =
-            INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: tokenId,
-                liquidity: liquidityAmount,
-                amount0Min: amount0Min,
-                amount1Min: amount1Min,
-                deadline: block.timestamp
-            });
+        INonfungiblePositionManager.DecreaseLiquidityParams
+            memory decreaseParams = INonfungiblePositionManager
+                .DecreaseLiquidityParams({
+                    tokenId: tokenId,
+                    liquidity: liquidityAmount,
+                    amount0Min: amount0Min,
+                    amount1Min: amount1Min,
+                    deadline: block.timestamp
+                });
 
         (amount0, amount1) = nfpmContract.decreaseLiquidity(decreaseParams);
 
         // Collect the tokens
-        INonfungiblePositionManager.CollectParams memory collectParams =
-            INonfungiblePositionManager.CollectParams({
+        INonfungiblePositionManager.CollectParams
+            memory collectParams = INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,
                 recipient: msg.sender,
                 amount0Max: type(uint128).max,
                 amount1Max: type(uint128).max
             });
 
-        (uint256 collected0, uint256 collected1) = nfpmContract.collect(collectParams);
+        (uint256 collected0, uint256 collected1) = nfpmContract.collect(
+            collectParams
+        );
 
         // Burn NFT if requested and all liquidity is removed
         bool burned = false;
@@ -274,7 +295,14 @@ contract Yield is Ownable, ReentrancyGuard, IERC721Receiver {
             nfpmContract.transferFrom(address(this), msg.sender, tokenId);
         }
 
-        emit LiquidityRemoved(dexType, tokenId, liquidityAmount, collected0, collected1, burned);
+        emit LiquidityRemoved(
+            dexType,
+            tokenId,
+            liquidityAmount,
+            collected0,
+            collected1,
+            burned
+        );
 
         console.log("Liquidity removed successfully");
         console.log("Token ID:", tokenId);
