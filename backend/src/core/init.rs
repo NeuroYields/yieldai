@@ -6,6 +6,7 @@ use alloy::{providers::ProviderBuilder, signers::local::PrivateKeySigner};
 use anyhow::Result;
 use dashmap::DashMap;
 use futures::stream::{self, StreamExt, TryStreamExt};
+use rig::{agent::Agent, client::CompletionClient, providers::gemini::{self, completion::{CompletionModel, gemini_api_types::{AdditionalParameters, GenerationConfig}}}};
 use tokio::sync::Semaphore;
 use tracing::{debug, info};
 
@@ -197,4 +198,29 @@ pub async fn init_pools_state(evm_provider: &EvmProvider) -> Result<DashMap<Stri
     Arc::try_unwrap(pools).map_err(|_| {
         anyhow::anyhow!("Failed to unwrap Arc<DashMap> - there are still active references")
     })
+}
+
+
+/// Initialize the AI agent using the Google Gemini provider
+pub async fn init_ai_agent() -> Result<Agent<CompletionModel>> {
+    // Initialize the Google Gemini client
+    let client = gemini::Client::from_env();
+
+    let gen_cfg = GenerationConfig {
+        ..Default::default()
+    };
+
+    let cfg = AdditionalParameters::default().with_config(gen_cfg);
+
+    // Create agent with a single context prompt
+    let agent = client
+        .agent("gemini-flash-latest")
+        .preamble("You are a liquidity manager AI assistant. Your goal is to help users optimize their Liquidity provision strategies on  uniswap V3 pools on EVM-compatible blockchains by suggesting the best price range to provide liquidity based on current market conditions and historical data (data will be provided to you on the prompt by coingecko).")
+        .temperature(0.0)
+        .additional_params(serde_json::to_value(cfg)?) 
+        .build();
+
+    tracing::info!("AI Agent initialized successfully.");
+
+    Ok(agent)
 }
