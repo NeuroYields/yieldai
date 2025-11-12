@@ -10,6 +10,7 @@ use crate::types::DexType;
 use crate::types::EvmProvider;
 use crate::types::Pool;
 use crate::types::Token;
+use crate::utils;
 
 sol!(
     #[derive(Debug)]
@@ -35,6 +36,17 @@ pub async fn fetch_pool_blockchain_details(
     let fee_scaled: f64 = pool_details.fee.into();
     let fee = fee_scaled / FEE_FACTOR;
 
+    let current_tick: i32 = pool_details.currentTick.as_i32();
+
+    // Calculate prices
+    let price1 = utils::amm_math::tick_to_price(
+        current_tick,
+        pool_details.token0Decimals,
+        pool_details.token1Decimals,
+    )?;
+
+    let price0 = 1.0 / price1;
+
     Ok(Pool {
         address: pool_address.to_string(),
         dex_type: dex_type.clone(),
@@ -50,8 +62,8 @@ pub async fn fetch_pool_blockchain_details(
         },
         fee,
         tick_spacing: pool_details.tickSpacing.as_i32(),
-        current_tick: pool_details.currentTick.as_i32(),
-        price0: 0.0, // Placeholder, implement price calculation logic
-        price1: 0.0, // Placeholder, implement price calculation logic
+        current_tick,
+        price0,
+        price1,
     })
 }

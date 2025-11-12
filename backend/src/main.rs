@@ -12,6 +12,7 @@ mod config;
 mod core;
 mod state;
 mod types;
+mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
