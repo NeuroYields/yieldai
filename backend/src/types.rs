@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum DexType {
     UniswapV3,
@@ -40,7 +41,7 @@ pub type EvmProvider = alloy::providers::fillers::FillProvider<
     alloy::providers::RootProvider,
 >;
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
 pub struct Pool {
     pub address: String,
     pub dex_type: DexType,
@@ -53,7 +54,7 @@ pub struct Pool {
     pub price1: f64,
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
 pub struct Token {
     pub address: String,
     pub symbol: String,
