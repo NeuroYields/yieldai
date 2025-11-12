@@ -5,9 +5,7 @@ use serde_json::Value;
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::{
-    config::{CONFIG},
-};
+use crate::config::CONFIG;
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
 pub struct CoingeckoOhlcvRes {
