@@ -2,9 +2,15 @@ use std::str::FromStr;
 
 use alloy::{providers::ProviderBuilder, signers::local::PrivateKeySigner};
 use anyhow::Result;
+use dashmap::DashMap;
 
-use crate::{config::CONFIG, types::EvmProvider};
+use crate::{
+    config::CONFIG,
+    core,
+    types::{EvmProvider, Pool},
+};
 
+/// Initialize the EVM provider using the configuration of the toml file and .env
 pub async fn init_evm_provider() -> Result<EvmProvider> {
     let private_key = CONFIG.private_key.as_str();
     let chain_id = CONFIG.toml.chain.chain_id;
@@ -20,4 +26,18 @@ pub async fn init_evm_provider() -> Result<EvmProvider> {
         .await?;
 
     Ok(evm_provider)
+}
+
+/// Initialize the pools state by looping on all pools defined in the toml file and fetching their blockchain details
+pub async fn init_pools_state() -> Result<DashMap<String, Pool>> {
+    let pools = DashMap::new();
+
+    for pool_config in CONFIG.toml.pools.iter() {
+        let pool_details =
+            core::pools::fetch_pool_blockchain_details(&pool_config.address, &pool_config.dex_type).await?;
+
+        pools.insert(pool_config.address.clone(), pool_details);
+    }
+
+    Ok(pools)
 }
