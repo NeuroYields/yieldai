@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use tracing::info;
 
 use crate::{
     core,
@@ -16,9 +17,11 @@ impl AppState {
         let evm_provider = core::init::init_evm_provider()
             .await
             .expect("Failed to initialize EVM provider");
-        let pools = core::init::init_pools_state()
+        let pools = core::init::init_pools_state(&evm_provider)
             .await
             .expect("Failed to initialize pools state");
+
+        info!("Pools state initialized: {:?}", pools);
 
         Self {
             evm_provider,

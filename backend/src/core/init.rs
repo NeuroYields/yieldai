@@ -29,12 +29,16 @@ pub async fn init_evm_provider() -> Result<EvmProvider> {
 }
 
 /// Initialize the pools state by looping on all pools defined in the toml file and fetching their blockchain details
-pub async fn init_pools_state() -> Result<DashMap<String, Pool>> {
+pub async fn init_pools_state(evm_provider: &EvmProvider) -> Result<DashMap<String, Pool>> {
     let pools = DashMap::new();
 
     for pool_config in CONFIG.toml.pools.iter() {
-        let pool_details =
-            core::pools::fetch_pool_blockchain_details(&pool_config.address, &pool_config.dex_type).await?;
+        let pool_details = core::pools::fetch_pool_blockchain_details(
+            evm_provider,
+            &pool_config.address,
+            &pool_config.dex_type,
+        )
+        .await?;
 
         pools.insert(pool_config.address.clone(), pool_details);
     }

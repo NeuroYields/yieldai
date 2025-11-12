@@ -60,3 +60,6 @@ impl Config {
 
 // Define a globally accessible static Config instance
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::load);
+
+// CONSTANTS
+pub const FEE_FACTOR: f64 = 10_000.0;
