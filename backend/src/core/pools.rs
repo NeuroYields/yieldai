@@ -39,13 +39,13 @@ pub async fn fetch_pool_blockchain_details(
     let current_tick: i32 = pool_details.currentTick.as_i32();
 
     // Calculate prices
-    let price1 = utils::amm_math::tick_to_price(
+    let price0 = utils::amm_math::tick_to_price(
         current_tick,
         pool_details.token0Decimals,
         pool_details.token1Decimals,
     )?;
 
-    let price0 = 1.0 / price1;
+    let price1 = 1.0 / price0;
 
     Ok(Pool {
         address: pool_address.to_string(),

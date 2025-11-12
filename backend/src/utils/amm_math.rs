@@ -1,7 +1,8 @@
 use anyhow::Result;
 
 /// Convert a tick to a price.
-/// It caclulate the price1 which the price of token1 per token0
+/// It caclulate the price of token0 in terms of token1.
+/// 1 token0 = price * token1
 pub fn tick_to_price(tick: i32, token0_decimals: u8, token1_decimals: u8) -> Result<f64> {
     let price_tick = 1.0001f64.powi(tick as i32);
 
