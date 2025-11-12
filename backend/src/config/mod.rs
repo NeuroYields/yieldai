@@ -63,3 +63,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(Config::load);
 
 // CONSTANTS
 pub const FEE_FACTOR: f64 = 10_000.0;
+
+/// Maximum number of concurrent tasks allowed
+/// This prevents overwhelming
+pub const MAX_ALLOWED_THREADS: usize = 8;

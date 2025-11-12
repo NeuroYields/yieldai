@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-/// Convert a tick to a price.
+/// Convert a tick to a price0.
 /// It caclulate the price of token0 in terms of token1.
 /// 1 token0 = price * token1
 pub fn tick_to_price(tick: i32, token0_decimals: u8, token1_decimals: u8) -> Result<f64> {
