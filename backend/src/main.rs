@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa_actix_web::AppExt;
@@ -9,7 +9,10 @@ use crate::config::CONFIG;
 
 mod api;
 mod config;
+mod core;
+mod state;
 mod types;
+mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -38,7 +41,9 @@ async fn main() -> std::io::Result<()> {
 
     info!("Logger initialized Successfully");
 
-    info!("Pools loaded from config: {:?}", CONFIG.toml.pools);
+    info!("Toml config: {:?}", CONFIG.toml);
+
+    let app_state = web::Data::new(state::AppState::new().await);
 
     info!("Starting HTTP server at http://localhost:{}", CONFIG.port);
     info!(
@@ -55,8 +60,10 @@ async fn main() -> std::io::Result<()> {
         let (app, app_api) = App::new()
             .wrap(cors)
             .into_utoipa_app()
+            .app_data(app_state.clone())
             .service(api::get_index_service)
             .service(api::get_health_service)
+            .service(api::get_pools_service)
             .split_for_parts();
 
         app.service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", app_api))

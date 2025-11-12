@@ -1,3 +1,12 @@
+[chain]
+rpc_url = "https://bsc-dataseed.binance.org/"
+chain_id = 56
+
 [[pools]]
 address = "0xaeaD6bd31dd66Eb3A6216aAF271D0E661585b0b1"
+dex_type = "PancakeSwapV3"
+
+
+[[pools]]
+address = "0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1"
 dex_type = "PancakeSwapV3"

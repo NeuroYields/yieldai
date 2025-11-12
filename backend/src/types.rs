@@ -1,6 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum DexType {
     UniswapV3,
@@ -15,4 +16,47 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     Ok(s.to_lowercase())
+}
+
+pub type EvmProvider = alloy::providers::fillers::FillProvider<
+    alloy::providers::fillers::JoinFill<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::Identity,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::GasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::BlobGasFiller,
+                        alloy::providers::fillers::JoinFill<
+                            alloy::providers::fillers::NonceFiller,
+                            alloy::providers::fillers::ChainIdFiller,
+                        >,
+                    >,
+                >,
+            >,
+            alloy::providers::fillers::ChainIdFiller,
+        >,
+        alloy::providers::fillers::WalletFiller<alloy::network::EthereumWallet>,
+    >,
+    alloy::providers::RootProvider,
+>;
+
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
+pub struct Pool {
+    pub address: String,
+    pub dex_type: DexType,
+    pub token0: Token,
+    pub token1: Token,
+    pub fee: f64,
+    pub tick_spacing: i32,
+    pub current_tick: i32,
+    pub price0: f64,
+    pub price1: f64,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
+pub struct Token {
+    pub address: String,
+    pub symbol: String,
+    pub decimals: u8,
 }
