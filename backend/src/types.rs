@@ -60,3 +60,17 @@ pub struct Token {
     pub symbol: String,
     pub decimals: u8,
 }
+
+#[derive(Debug, Deserialize, Clone, Serialize, ToSchema)]
+pub enum StrategyType {
+    Default,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct RangeSuggestion {
+    pub up_price: f64,
+    pub down_price: f64,
+    pub confidence: f64,
+    pub reason: String,
+    pub strategy: StrategyType,
+}

@@ -6,7 +6,7 @@ use alloy::{providers::ProviderBuilder, signers::local::PrivateKeySigner};
 use anyhow::Result;
 use dashmap::DashMap;
 use futures::stream::{self, StreamExt, TryStreamExt};
-use rig::{agent::Agent, client::CompletionClient, providers::gemini::{self, completion::{CompletionModel, gemini_api_types::{AdditionalParameters, GenerationConfig}}}};
+use rig::{agent::Agent, client::CompletionClient, providers::gemini::{self, completion::{CompletionModel, gemini_api_types::{AdditionalParameters, GenerationConfig, ThinkingConfig}}}};
 use tokio::sync::Semaphore;
 use tracing::{debug, info};
 
@@ -207,6 +207,10 @@ pub async fn init_ai_agent() -> Result<Agent<CompletionModel>> {
     let client = gemini::Client::from_env();
 
     let gen_cfg = GenerationConfig {
+        thinking_config: Some(ThinkingConfig {
+            thinking_budget: 10, 
+            include_thoughts: None,
+        }),
         ..Default::default()
     };
 
@@ -215,7 +219,7 @@ pub async fn init_ai_agent() -> Result<Agent<CompletionModel>> {
     // Create agent with a single context prompt
     let agent = client
         .agent("gemini-flash-latest")
-        .preamble("You are a liquidity manager AI assistant. Your goal is to help users optimize their Liquidity provision strategies on  uniswap V3 pools on EVM-compatible blockchains by suggesting the best price range to provide liquidity based on current market conditions and historical data (data will be provided to you on the prompt by coingecko).")
+        .preamble("You are a liquidity manager AI assistant. Your goal is to help users optimize their Liquidity provision strategies on  uniswap V3 pools on EVM-compatible blockchains by suggesting the best price range to provide liquidity based on current market conditions and historical data (data will be provided to you on the prompt by coingecko). Always Respect teh given JSON schema in your answers. and only return JSON objects only.")
         .temperature(0.0)
         .additional_params(serde_json::to_value(cfg)?) 
         .build();
