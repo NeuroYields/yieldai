@@ -13,6 +13,7 @@ dotenvy = "0.15.7"
 futures = "0.3.31"
 once_cell = "1.21.3"
 reqwest = "0.12.24"
+rig-core = "0.24.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tokio = { version = "1.48.0", features = ["sync"] }

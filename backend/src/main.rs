@@ -11,6 +11,7 @@ mod api;
 mod config;
 mod core;
 mod state;
+mod strategies;
 mod types;
 mod utils;
 
@@ -64,6 +65,8 @@ async fn main() -> std::io::Result<()> {
             .service(api::get_index_service)
             .service(api::get_health_service)
             .service(api::get_pools_service)
+            .service(api::get_pool_coingecko_ohlcv_service)
+            .service(api::suggest_liquidity_range_service)
             .split_for_parts();
 
         app.service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", app_api))
